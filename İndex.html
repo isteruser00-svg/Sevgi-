@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heart Galaxy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.012);
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 300);
+    camera.position.set(0, 7, 34);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    document.body.appendChild(renderer.domElement);
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.4, 0.5, 0.18);
+    composer.addPass(bloom);
+
+    // Stars
+    function createStars(count = 5000) {
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(count * 3);
+      const col = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const r = 50 + Math.random() * 120;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        pos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+        pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+        pos[i*3+2] = r * Math.cos(phi);
+        const c = 0.5 + Math.random() * 0.5;
+        col[i*3] = col[i*3+1] = col[i*3+2] = c;
+      }
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      return new THREE.Points(geo, new THREE.PointsMaterial({
+        size: 0.12, vertexColors: true, transparent: true, opacity: 0.8,
+        depthWrite: false, blending: THREE.AdditiveBlending
+      }));
+    }
+    scene.add(createStars());
+
+    // Burst
+    const BURST_COUNT = 8000;
+    const burstGeo = new THREE.BufferGeometry();
+    const burstPos = new Float32Array(BURST_COUNT * 3);
+    const burstCol = new Float32Array(BURST_COUNT * 3);
+    const burstData = [];
+    for (let i = 0; i < BURST_COUNT; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.random() * 2;
+      burstPos[i*3]   = Math.cos(angle) * radius;
+      burstPos[i*3+1] = (Math.random() - 0.5) * 2;
+      burstPos[i*3+2] = Math.sin(angle) * radius;
+      burstCol[i*3]   = 1.0;
+      burstCol[i*3+1] = 0.3 + Math.random() * 0.4;
+      burstCol[i*3+2] = 0.6 + Math.random() * 0.3;
+      burstData.push({
+        angle, radius: 0.5 + Math.random() * 1.5,
+        speed: 0.15 + Math.random() * 0.35,
+        y: (Math.random() - 0.5) * 1.5
+      });
+    }
+    burstGeo.setAttribute('position', new THREE.BufferAttribute(burstPos, 3));
+    burstGeo.setAttribute('color', new THREE.BufferAttribute(burstCol, 3));
+    const burst = new THREE.Points(burstGeo, new THREE.PointsMaterial({
+      size: 0.25, vertexColors: true, transparent: true, opacity: 1,
+      depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    scene.add(burst);
+
+    // Disk
+    const DISK_COUNT = 14000;
+    const diskGeo = new THREE.BufferGeometry();
+    const diskPos = new Float32Array(DISK_COUNT * 3);
+    const diskCol = new Float32Array(DISK_COUNT * 3);
+    const diskData = [];
+    for (let i = 0; i < DISK_COUNT; i++) {
+      const radius = 1.6 + Math.pow(Math.random(), 0.65) * 18;
+      const angle = Math.random() * Math.PI * 2;
+      const y = (Math.random() - 0.5) * (0.3 + radius * 0.06);
+      diskPos[i*3]   = Math.cos(angle) * radius;
+      diskPos[i*3+1] = y;
+      diskPos[i*3+2] = Math.sin(angle) * radius;
+      const t = (radius - 1.6) / 18;
+      diskCol[i*3]   = 1.0;
+      diskCol[i*3+1] = 0.12 + t * 0.3;
+      diskCol[i*3+2] = 0.5 + t * 0.4;
+      diskData.push({
+        radius, angle, y,
+        speed: 0.006 + Math.random() * 0.022 * (1.8 / (radius + 0.8)),
+        ySpeed: (Math.random() - 0.5) * 0.003
+      });
+    }
+    diskGeo.setAttribute('position', new THREE.BufferAttribute(diskPos, 3));
+    diskGeo.setAttribute('color', new THREE.BufferAttribute(diskCol, 3));
+    const disk = new THREE.Points(diskGeo, new THREE.PointsMaterial({
+      size: 0.2, vertexColors: true, transparent: true, opacity: 0,
+      depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    scene.add(disk);
+
+    // Black hole + ring
+    const blackHole = new THREE.Mesh(
+      new THREE.SphereGeometry(1.5, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0x000000 })
+    );
+    blackHole.scale.setScalar(0);
+    scene.add(blackHole);
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.6, 2.5, 64),
+      new THREE.MeshBasicMaterial({
+        color: 0xff2d6a, side: THREE.DoubleSide,
+        transparent: true, opacity: 0, blending: THREE.AdditiveBlending
+      })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    scene.add(ring);
+
+    // Big heart
+    const HEART_P_COUNT = 4000;
+    const heartPGeo = new THREE.BufferGeometry();
+    const heartPPos = new Float32Array(HEART_P_COUNT * 3);
+    const heartPCol = new Float32Array(HEART_P_COUNT * 3);
+    const heartTargets = [];
+    for (let i = 0; i < HEART_P_COUNT; i++) {
+      heartPPos[i*3]   = (Math.random() - 0.5) * 40;
+      heartPPos[i*3+1] = (Math.random() - 0.5) * 30;
+      heartPPos[i*3+2] = (Math.random() - 0.5) * 40;
+      heartPCol[i*3]   = 1.0;
+      heartPCol[i*3+1] = 0.2 + Math.random() * 0.4;
+      heartPCol[i*3+2] = 0.55 + Math.random() * 0.35;
+
+      const t = Math.random() * Math.PI * 2;
+      const scale = 0.24 + Math.random() * 0.07;
+      let x = 16 * Math.pow(Math.sin(t), 3);
+      let y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+      let z = (Math.random() - 0.5) * 7;
+      x += (Math.random() - 0.5) * 1.8;
+      y += (Math.random() - 0.5) * 1.8;
+      heartTargets.push({ x: x * scale, y: y * scale + 9.5, z: z * scale * 0.35 });
+    }
+    heartPGeo.setAttribute('position', new THREE.BufferAttribute(heartPPos, 3));
+    heartPGeo.setAttribute('color', new THREE.BufferAttribute(heartPCol, 3));
+    const heartParticles = new THREE.Points(heartPGeo, new THREE.PointsMaterial({
+      size: 0.16, vertexColors: true, transparent: true, opacity: 0,
+      depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    scene.add(heartParticles);
+
+    // ===== YAZILAR - İŞARETLEDİĞİN YERE (çok daha yukarı) =====
+    function createTextSprite(text) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 1024;
+      canvas.height = 220;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // gölge
+      ctx.shadowColor = 'rgba(0,0,0,0.95)';
+      ctx.shadowBlur = 14;
+      ctx.shadowOffsetX = 4;
+      ctx.shadowOffsetY = 4;
+
+      // pembe dış
+      ctx.fillStyle = '#ff4d8d';
+      ctx.font = 'bold 86px "Segoe UI", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+      // beyaz iç
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 82px "Segoe UI", Arial, sans-serif';
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+      // koyu kenar
+      ctx.strokeStyle = '#12000a';
+      ctx.lineWidth = 5;
+      ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.NormalBlending
+      });
+
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(10.5, 2.4, 1);
+      return sprite;
+    }
+
+    const phrases = [
+      "Seni seviyorum",
+      "İyi ki varsın",
+      "Kalbim seninle",
+      "Sonsuza kadar"
+    ];
+
+    // ÇOK DAHA YUKARI konumlar (işaretlediğin boş alan)
+    const textSprites = [];
+    const textPositions = [
+      { x: 0, y: 22.5, z: 0 },  // en üst
+      { x: 0, y: 20.4, z: 0 },
+      { x: 0, y: 18.3, z: 0 },
+      { x: 0, y: 16.2, z: 0 }   // kalpten epey yukarıda
+    ];
+
+    phrases.forEach((txt, i) => {
+      const sprite = createTextSprite(txt);
+      sprite.position.set(textPositions[i].x, textPositions[i].y, textPositions[i].z);
+      sprite.userData = {
+        baseY: textPositions[i].y,
+        phase: i * 1.1,
+        appearTime: 5.0 + i * 0.35
+      };
+      scene.add(sprite);
+      textSprites.push(sprite);
+    });
+
+    // Small hearts
+    function createHeartShape() {
+      const s = new THREE.Shape();
+      s.moveTo(0.25, 0.25);
+      s.bezierCurveTo(0.25, 0.25, 0.20, 0, 0, 0);
+      s.bezierCurveTo(-0.30, 0, -0.30, 0.35, -0.30, 0.35);
+      s.bezierCurveTo(-0.30, 0.55, -0.10, 0.77, 0.25, 0.95);
+      s.bezierCurveTo(0.60, 0.77, 0.80, 0.55, 0.80, 0.35);
+      s.bezierCurveTo(0.80, 0.35, 0.80, 0, 0.50, 0);
+      s.bezierCurveTo(0.35, 0, 0.25, 0.25, 0.25, 0.25);
+      return s;
+    }
+    const heartShape = createHeartShape();
+    const heartGeo = new THREE.ExtrudeGeometry(heartShape, {
+      depth: 0.1, bevelEnabled: true, bevelSegments: 2, steps: 1,
+      bevelSize: 0.035, bevelThickness: 0.035
+    });
+    heartGeo.scale(0.32, 0.32, 0.32);
+    heartGeo.center();
+
+    const smallHearts = [];
+    for (let i = 0; i < 160; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(0.92 + Math.random()*0.06, 0.9, 0.55 + Math.random()*0.15),
+        transparent: true, opacity: 0, side: THREE.DoubleSide
+      });
+      const mesh = new THREE.Mesh(heartGeo, mat);
+      mesh.userData = {
+        radius: 4 + Math.random() * 15,
+        angle: Math.random() * Math.PI * 2,
+        ySpeed: 0.005 + Math.random() * 0.012,
+        yOffset: -8 - Math.random() * 6,
+        rotSpeed: (Math.random() - 0.5) * 0.05,
+        appearTime: 4.8 + Math.random() * 2.5
+      };
+      mesh.position.set(
+        Math.cos(mesh.userData.angle) * mesh.userData.radius,
+        mesh.userData.yOffset,
+        Math.sin(mesh.userData.angle) * mesh.userData.radius
+      );
+      scene.add(mesh);
+      smallHearts.push(mesh);
+    }
+
+    // Animate
+    let startTime = null;
+    const phases = { burst: 0.0, diskForm: 1.2, blackHole: 2.0, heartForm: 2.8, smallHearts: 4.6 };
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+      if (!startTime) startTime = time;
+      const t = (time - startTime) / 1000;
+
+      // Burst
+      if (t < 2.5) {
+        const progress = Math.min(t / 1.8, 1);
+        const posArr = burst.geometry.attributes.position.array;
+        for (let i = 0; i < BURST_COUNT; i++) {
+          const d = burstData[i];
+          const expand = d.radius + progress * (8 + d.speed * 25);
+          posArr[i*3]   = Math.cos(d.angle + t * 0.8) * expand;
+          posArr[i*3+1] = d.y + Math.sin(t * 2 + i) * 0.3;
+          posArr[i*3+2] = Math.sin(d.angle + t * 0.8) * expand;
+        }
+        burst.geometry.attributes.position.needsUpdate = true;
+        burst.material.opacity = 1 - Math.max(0, (t - 1.5) / 1.0);
+      } else {
+        burst.visible = false;
+      }
+
+      // Disk
+      if (t > phases.diskForm) {
+        const diskProgress = Math.min((t - phases.diskForm) / 1.5, 1);
+        disk.material.opacity = diskProgress * 0.95;
+        const posArr = disk.geometry.attributes.position.array;
+        for (let i = 0; i < DISK_COUNT; i++) {
+          const d = diskData[i];
+          d.angle += d.speed;
+          d.y += d.ySpeed;
+          if (Math.abs(d.y) > 1.1 + d.radius * 0.04) d.ySpeed *= -1;
+          posArr[i*3]   = Math.cos(d.angle) * d.radius;
+          posArr[i*3+1] = d.y;
+          posArr[i*3+2] = Math.sin(d.angle) * d.radius;
+        }
+        disk.geometry.attributes.position.needsUpdate = true;
+      }
+
+      // Black hole
+      if (t > phases.blackHole) {
+        const p = Math.min((t - phases.blackHole) / 1.2, 1);
+        blackHole.scale.setScalar(p);
+        ring.material.opacity = p * (0.28 + Math.sin(t * 2.5) * 0.1);
+      }
+
+      // Big heart
+      if (t > phases.heartForm) {
+        const formProgress = Math.min((t - phases.heartForm) / 1.8, 1);
+        heartParticles.material.opacity = formProgress;
+        const posArr = heartParticles.geometry.attributes.position.array;
+        for (let i = 0; i < HEART_P_COUNT; i++) {
+          const target = heartTargets[i];
+          const ease = 1 - Math.pow(1 - formProgress, 3);
+          posArr[i*3]   += (target.x - posArr[i*3])   * (0.04 + ease * 0.08);
+          posArr[i*3+1] += (target.y - posArr[i*3+1]) * (0.04 + ease * 0.08);
+          posArr[i*3+2] += (target.z - posArr[i*3+2]) * (0.04 + ease * 0.08);
+        }
+        heartParticles.geometry.attributes.position.needsUpdate = true;
+        if (formProgress > 0.85) {
+          heartParticles.rotation.y += 0.006;
+          const pulse = 1 + Math.sin(t * 1.7) * 0.035;
+          heartParticles.scale.setScalar(pulse);
+        }
+      }
+
+      // Small hearts
+      if (t > phases.smallHearts) {
+        smallHearts.forEach(mesh => {
+          const u = mesh.userData;
+          if (t > u.appearTime) {
+            mesh.material.opacity = Math.min(mesh.material.opacity + 0.025, 0.9);
+            u.angle += 0.0035 + (0.007 / (u.radius + 1));
+            u.yOffset += u.ySpeed * 0.45;
+            if (u.yOffset > 13) {
+              u.yOffset = -5 - Math.random() * 4;
+              u.radius = 4 + Math.random() * 15;
+            }
+            mesh.position.x = Math.cos(u.angle) * u.radius;
+            mesh.position.z = Math.sin(u.angle) * u.radius;
+            mesh.position.y = u.yOffset;
+            mesh.rotation.y += u.rotSpeed;
+            mesh.rotation.x += u.rotSpeed * 0.5;
+          }
+        });
+      }
+
+      // Text
+      textSprites.forEach(sprite => {
+        const u = sprite.userData;
+        if (t > u.appearTime) {
+          sprite.material.opacity = Math.min(sprite.material.opacity + 0.04, 1.0);
+          sprite.position.y = u.baseY + Math.sin(t * 1.2 + u.phase) * 0.2;
+        }
+      });
+
+      // Camera - biraz daha yukarı bakıyor
+      const camT = Math.min(t / 6, 1);
+      camera.position.x = Math.sin(t * 0.07) * 2.0;
+      camera.position.y = 8 + Math.sin(t * 0.1) * 0.6;
+      camera.position.z = 34 - camT * 3.5;
+      camera.lookAt(0, 8, 0);
+
+      composer.render();
+    }
+
+    animate(0);
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
